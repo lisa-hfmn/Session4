@@ -1,0 +1,173 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Libraries und Daten
+```{r}
+library(tidyverse)
+library(e1071)
+library(caret)
+library(pROC)
+```
+
+```{r}
+titanic <- read_delim("titanic.csv", ";", 
+    escape_double = FALSE, trim_ws = TRUE)
+```
+
+```{r}
+(titanic2 <- titanic %>%
+  select(survived,pclass,sex,age,sibsp))
+```
+
+```{r}
+titanic2 <- titanic2 %>%
+  mutate(age = as.numeric(str_replace(age,",",".")))
+```
+
+```{r}
+titanic2 <- na.omit(titanic2)
+```
+
+```{r}
+titanic2 <- titanic2 %>%
+  mutate(sex = ifelse(sex == "female", 1, 0))
+```
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+set.seed(89)
+inTrain <- createDataPartition(
+  y = titanic2$survived,
+  p = .8,
+  list = FALSE)
+training <- titanic2[ inTrain,]
+testing  <- titanic2[-inTrain,]
+```
+
+```{r}
+model <- svm(survived ~ ., data = training)
+summary(model)
+pred <- predict(model, testing[,-1], probability = FALSE)
+```
+
+```{r}
+(test.results <- cbind(pred, testing))
+```
+
+```{r}
+pROC_obj <- roc(test.results$survived, test.results$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+
+
+
+# Naive Bayes
+
+
+
+```{r}
+my_training <- training %>%
+  mutate(survived = as.factor(survived))%>%
+  mutate(sex = as.factor(sex))%>%
+  mutate(pclass = as.factor(pclass)) %>%
+  mutate(age = as.factor(age)) %>%
+  mutate(sibsp = as.factor(sibsp))
+model <- naiveBayes(survived ~ ., data = my_training)
+model
+```
+
+
+```{r}
+my_testing <- testing %>%
+  mutate(sex = as.factor(sex)) %>%
+  mutate(pclass = as.factor(pclass))%>%
+  mutate(age = as.factor(age)) %>%
+  mutate(sibsp = as.factor(sibsp))
+pred <- predict(model, my_testing)
+table(pred, my_testing$survived)
+```
+
+```{r}
+(test.results <- cbind(pred, my_testing))
+```
+
+```{r}
+test.results <- test.results %>%
+  mutate(pred = as.numeric(pred))
+pROC_obj <- roc(as.numeric(as.character(test.results$survived)), test.results$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+
+```
+
+## Decision Tree
+
+Der Decision Tree hat mit dem zusätzlichen Feature nicht mehr richtig funktionert (es wurde auf einmal ein kleinerer Tree angezeigt, obwohl ein Feature dazugekommen ist), daher habe ich das Feature pclass für den Tree entfernt.
+
+```{r}
+training2 <- training %>%
+  select(survived,sex,age,sibsp)
+testing2 <- testing %>%
+  select(survived,sex,age,sibsp)
+
+library(rpart)
+library(rpart.plot)
+tree<- rpart(survived~., data = training2, method = 'class')
+rpart.plot(tree)
+
+```
+
+```{r}
+dt_results <- predict(tree, testing2[,-1], type = 'prob')
+head(model.results.dt <- cbind(testing2,dt_results),500)
+```
+
+```{r}
+test.results2 <- test.results %>%
+  mutate(pred = ifelse(pred>=0.5,1,0))
+table(test.results2$pred, testing$survived)
+```
+
+```{r}
+pROC_obj <- roc(model.results.dt$survived,model.results.dt$`1`,
+            smoothed = TRUE,
+            # arguments for ci
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            # arguments for plot
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+
+
+# Aufgabe 2 und 3
+
+
+Die SVM hat einen AUC-Wert von 0,839.
+Naive Bayes liegt bei 0,709.
+Der Decision Tree liegt bei 0,770.
+
+In diesem Beispiel hat SVM also die beste Performance. 
+
+Der Decision Tree ist zwar übersichtlich, funktioniert bei zu vielen Features aber nicht mehr richtig.
+
+Die Performance der Algorithmen ist generell abhängig von der Qualität der Daten.
+
+
